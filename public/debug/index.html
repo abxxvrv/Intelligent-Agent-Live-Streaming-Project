@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>STS2 Agent Debug</title>
+    <link rel="stylesheet" href="/debug/styles.css" />
+  </head>
+  <body>
+    <main class="debug-shell">
+      <header class="topbar">
+        <div>
+          <h1>STS2 Agent Debug</h1>
+          <p id="connectionState">连接中...</p>
+        </div>
+        <label class="takeover">
+          <input type="checkbox" id="autoplayToggle" />
+          <span>手动接管</span>
+        </label>
+      </header>
+
+      <section class="workspace">
+        <form class="composer" id="composer">
+          <label>
+            <span>用户</span>
+            <input id="userInput" name="user" value="调试员" maxlength="24" />
+          </label>
+          <label class="message-field">
+            <span>消息</span>
+            <textarea
+              id="messageInput"
+              name="text"
+              rows="6"
+              placeholder="塔塔看看现在能做什么"
+              maxlength="300"
+            ></textarea>
+          </label>
+          <div class="quick-actions">
+            <button type="button" data-message="塔塔看看现在能做什么">看局面</button>
+            <button type="button" data-message="开始接管，打一回合">开始接管</button>
+            <button type="button" data-message="暂停，先别动">暂停</button>
+          </div>
+          <button class="send-button" type="submit">发送</button>
+        </form>
+
+        <section class="feed-panel">
+          <div class="panel-head">
+            <h2>对话</h2>
+            <span id="lastVoice">等待语音</span>
+          </div>
+          <div class="feed" id="feed"></div>
+        </section>
+
+        <section class="inspect-panel">
+          <div class="game-state">
+            <div class="panel-head">
+              <h2>游戏</h2>
+            </div>
+            <p id="gameSummary">等待游戏状态...</p>
+          </div>
+          <div class="trace-state">
+            <div class="panel-head">
+              <h2>思考过程</h2>
+            </div>
+            <div class="trace-list" id="traceList"></div>
+          </div>
+          <div class="tool-state">
+            <div class="panel-head">
+              <h2>工具</h2>
+              <button type="button" id="clearTools">清空</button>
+            </div>
+            <div class="tool-list" id="toolList"></div>
+          </div>
+        </section>
+      </section>
+    </main>
+    <script type="module" src="/debug/main.js"></script>
+  </body>
+</html>

@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.env
+.cache/
+coverage/
+npm-debug.log*
+*.local
+mcp_probe.log
+*.mcp_probe.log
+tests/.tmp/

@@ -1,0 +1,36 @@
+{
+  "name": "sts2-live-agent",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx src/main.ts",
+    "dev:mock": "tsx src/main.ts --mock",
+    "start": "node dist/src/main.js",
+    "start:mock": "node dist/src/main.js --mock",
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "smoke:deepseek-mcp": "npm run build && node dist/scripts/smoke-deepseek-mcp.js",
+    "smoke:sts2-mcp": "npm run build && node dist/scripts/smoke-sts2-mcp.js"
+  },
+  "dependencies": {
+    "@langchain/core": "^1.1.41",
+    "@langchain/langgraph": "^1.2.9",
+    "@langchain/openai": "^1.4.4",
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "bilibili-live-danmaku": "^0.7.6",
+    "dotenv": "^16.4.7",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.7",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3",
+    "vitest": "^2.1.8"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

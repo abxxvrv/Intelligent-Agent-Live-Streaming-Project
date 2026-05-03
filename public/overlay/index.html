@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>STS2 Live Agent Overlay</title>
+    <link rel="stylesheet" href="/overlay/styles.css" />
+  </head>
+  <body>
+    <main class="stage" aria-live="polite">
+      <section class="game-panel" id="gamePanel">
+        <div class="panel-title">STS2</div>
+        <div class="game-summary" id="gameSummary">等待游戏状态...</div>
+      </section>
+
+      <section class="chat-panel" id="chatPanel">
+        <div class="panel-title">弹幕</div>
+        <div class="danmaku-list" id="danmakuList"></div>
+      </section>
+
+      <section class="avatar-wrap" id="avatarWrap">
+        <canvas class="live2d-canvas" id="live2dCanvas"></canvas>
+        <div class="avatar-fallback" id="avatarFallback">
+          <div class="face">
+            <span class="eye left"></span>
+            <span class="eye right"></span>
+            <span class="mouth" id="fallbackMouth"></span>
+          </div>
+        </div>
+        <img class="avatar-img" id="avatarImage" alt="" />
+      </section>
+
+      <section class="bubble" id="bubble">
+        <div class="speaker" id="speaker">塔塔</div>
+        <div class="speech" id="speech">准备开播...</div>
+      </section>
+    </main>
+    <script type="module" src="/overlay/live2d-runtime-loader.js"></script>
+  </body>
+</html>

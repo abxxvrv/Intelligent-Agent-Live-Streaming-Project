@@ -1,0 +1,289 @@
+:root {
+  color-scheme: light;
+  font-family:
+    "Microsoft YaHei UI",
+    "Microsoft YaHei",
+    system-ui,
+    sans-serif;
+  --ink: #1d2433;
+  --panel: rgba(255, 255, 255, 0.78);
+  --line: rgba(35, 45, 65, 0.18);
+  --rose: #ff6f91;
+  --teal: #23b5a9;
+  --amber: #f4b942;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: transparent;
+}
+
+.stage {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  color: var(--ink);
+}
+
+.game-panel,
+.chat-panel {
+  position: absolute;
+  left: 28px;
+  width: min(380px, 34vw);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  padding: 12px 14px;
+  backdrop-filter: blur(12px);
+}
+
+.game-panel {
+  top: 28px;
+}
+
+.chat-panel {
+  bottom: 156px;
+  min-height: 150px;
+}
+
+.panel-title {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0;
+  color: #5a6273;
+  margin-bottom: 8px;
+}
+
+.game-summary {
+  font-size: 17px;
+  line-height: 1.45;
+  word-break: break-word;
+}
+
+.danmaku-list {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  max-height: 118px;
+  overflow: hidden;
+}
+
+.danmaku {
+  font-size: 15px;
+  line-height: 1.35;
+  word-break: break-word;
+}
+
+.danmaku strong {
+  color: #0d8078;
+}
+
+.avatar-wrap {
+  position: absolute;
+  right: 5vw;
+  bottom: 96px;
+  width: min(440px, 38vw);
+  height: min(620px, 72vh);
+  transform-origin: bottom center;
+  transition: transform 180ms ease;
+}
+
+.avatar-wrap.live2d-ready .avatar-fallback,
+.avatar-wrap.live2d-ready .avatar-img {
+  display: none;
+}
+
+.live2d-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: none;
+}
+
+.avatar-wrap.live2d-ready .live2d-canvas {
+  display: block;
+}
+
+.avatar-wrap.talk {
+  animation: breathe 820ms ease-in-out infinite;
+}
+
+.avatar-wrap.nod {
+  animation: nod 520ms ease-in-out 1;
+}
+
+.avatar-wrap.wave {
+  animation: wave 800ms ease-in-out 1;
+}
+
+.avatar-wrap.think {
+  transform: rotate(-2deg) translateY(4px);
+}
+
+.avatar-wrap.panic {
+  animation: panic 130ms linear 8;
+}
+
+.avatar-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: bottom center;
+  display: none;
+}
+
+.avatar-img.loaded {
+  display: block;
+}
+
+.avatar-fallback {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  width: 82%;
+  aspect-ratio: 0.72;
+  transform: translateX(-50%);
+  border-radius: 42% 42% 18% 18%;
+  background:
+    radial-gradient(circle at 36% 22%, rgba(255, 255, 255, 0.8), transparent 13%),
+    linear-gradient(140deg, #ffcf6f 0%, #ff7b9c 46%, #5bd1c8 100%);
+  border: 2px solid rgba(255, 255, 255, 0.85);
+  box-shadow: 0 16px 40px rgba(22, 30, 45, 0.24);
+}
+
+.avatar-fallback::before {
+  content: "";
+  position: absolute;
+  left: 15%;
+  right: 15%;
+  top: 13%;
+  height: 24%;
+  border-radius: 52% 52% 44% 44%;
+  background: rgba(68, 42, 64, 0.28);
+}
+
+.face {
+  position: absolute;
+  left: 23%;
+  right: 23%;
+  top: 29%;
+  height: 28%;
+  border-radius: 48%;
+  background: rgba(255, 241, 229, 0.94);
+}
+
+.eye {
+  position: absolute;
+  top: 34%;
+  width: 10%;
+  height: 17%;
+  border-radius: 50%;
+  background: #293145;
+}
+
+.eye.left {
+  left: 28%;
+}
+
+.eye.right {
+  right: 28%;
+}
+
+.mouth {
+  position: absolute;
+  left: 50%;
+  bottom: 24%;
+  width: 20%;
+  height: 5%;
+  transform: translateX(-50%);
+  border-radius: 999px;
+  background: #293145;
+  transition: height 80ms ease;
+}
+
+.mouth.open {
+  height: 16%;
+}
+
+.bubble {
+  position: absolute;
+  left: 50%;
+  bottom: 28px;
+  width: min(840px, 72vw);
+  transform: translateX(-50%);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.88);
+  padding: 14px 18px 16px;
+  box-shadow: 0 10px 34px rgba(28, 36, 52, 0.16);
+  backdrop-filter: blur(14px);
+}
+
+.speaker {
+  color: #b54665;
+  font-size: 14px;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.speech {
+  font-size: clamp(22px, 2.2vw, 32px);
+  line-height: 1.25;
+  font-weight: 700;
+  letter-spacing: 0;
+  word-break: break-word;
+}
+
+@keyframes breathe {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+@keyframes nod {
+  0%,
+  100% {
+    transform: rotate(0);
+  }
+  50% {
+    transform: rotate(4deg) translateY(8px);
+  }
+}
+
+@keyframes wave {
+  0%,
+  100% {
+    transform: rotate(0);
+  }
+  25% {
+    transform: rotate(-4deg);
+  }
+  75% {
+    transform: rotate(4deg);
+  }
+}
+
+@keyframes panic {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  50% {
+    transform: translateX(8px);
+  }
+}
