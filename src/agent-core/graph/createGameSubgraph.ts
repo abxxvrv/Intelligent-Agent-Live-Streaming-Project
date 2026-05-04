@@ -43,10 +43,11 @@ const OBSERVE_TOOLS = new Set([
 const METADATA_TOOLS = new Set(["get_relevant_game_data", "get_game_data_item", "get_game_data_items"]);
 const EXPRESS_TOOLS = new Set(["express"]);
 const GAME_ACTION_TOOLS = new Set(["act"]);
+const ASSISTANT_CONTENT_REQUIRES_EXPRESS_ERROR = "assistant content requires express before act";
 
 export function createGameSubgraph(options: CreateGameSubgraphOptions) {
   const activeLogger = options.logger || logger;
-  const maxToolLoops = options.maxToolLoops ?? 4;
+  const maxToolLoops = options.maxToolLoops ?? 3;
   const toolsByName = new Map(options.gameTools.map((item) => [item.name, item]));
   const client = createDeepSeekClient(options.config);
   const deepseekTools = createDeepSeekTools(options.gameTools);
@@ -211,6 +212,10 @@ export function createGameSubgraph(options: CreateGameSubgraphOptions) {
 
       const rawMessage = normalizeDeepSeekAssistantMessage(response.choices[0]?.message);
       const toolCallNames = (rawMessage.tool_calls || []).map((call) => getDeepSeekToolCallName(call)).filter(Boolean);
+      const content = getDeepSeekMessageContent(rawMessage).trim();
+      const hasExpressCall = (rawMessage.tool_calls || []).some(
+        (call) => getDeepSeekToolCallName(call) === "express"
+      );
 
       activeLogger.info("game llm completed", {
         runId: state.runId,
@@ -226,6 +231,36 @@ export function createGameSubgraph(options: CreateGameSubgraphOptions) {
           title: "游戏代理说明",
           message: publicMessage
         });
+      }
+
+      if (content && !hasExpressCall) {
+        emitTrace(options, state, {
+          stage: "game_agent_node",
+          title: "需要先调用 express",
+          message: "模型写了面向观众的内容，但没有调用 express；本轮禁止直接执行旧 act。",
+          status: "error",
+          detail: content.slice(0, 240)
+        });
+
+        return {
+          deepseekMessages: [
+            {
+              role: "user",
+              content: [
+                "你刚才写了面向观众的内容，但没有调用 express。",
+                "这些内容不会被 overlay/TTS 播放。",
+                "请先调用 express 输出这段内容。",
+                "不要在这一步调用 act；express 返回后再决定是否行动。",
+                "",
+                `需要播报的内容：${content}`
+              ].join("\n")
+            }
+          ],
+          messages: [],
+          toolLoopCount: state.toolLoopCount + 1,
+          lastToolCategory: "error",
+          lastToolError: ASSISTANT_CONTENT_REQUIRES_EXPRESS_ERROR
+        };
       }
 
       for (const call of rawMessage.tool_calls || []) {
@@ -272,6 +307,13 @@ export function createGameSubgraph(options: CreateGameSubgraphOptions) {
 
   const routeAfterGameAgent = (state: AgentGraphState) => {
     if (state.mode !== "game") return "evaluate_game_status";
+    if (
+      getLastDeepSeekMessage(state)?.role === "user" &&
+      state.lastToolError === ASSISTANT_CONTENT_REQUIRES_EXPRESS_ERROR &&
+      state.toolLoopCount < maxToolLoops
+    ) {
+      return "game_agent_node";
+    }
     if (!hasToolCalls(state)) return "evaluate_game_status";
     if (state.toolLoopCount >= maxToolLoops) {
       emitTrace(options, state, {
@@ -311,6 +353,9 @@ export function createGameSubgraph(options: CreateGameSubgraphOptions) {
     let observedGameState: unknown;
     let observedAvailableActions: unknown[] | undefined;
     let observedAt: number | undefined;
+    let expressCallCount = countToolResults(state, EXPRESS_TOOLS);
+    let recentChatLookupCount = countToolResults(state, new Set(["get_recent_chat_messages"]));
+    let metadataCallCount = countToolResults(state, METADATA_TOOLS);
 
     for (const call of toolCalls) {
       const toolName = getDeepSeekToolCallName(call);
@@ -344,6 +389,42 @@ export function createGameSubgraph(options: CreateGameSubgraphOptions) {
           toolName,
           status: "error",
           detail: content
+        });
+        continue;
+      }
+
+      if (toolName === "wait_until_actionable" && state.availableActions.length > 0) {
+        const message = "availableActions 非空时不要调用 wait_until_actionable";
+        const content = JSON.stringify({ error: message });
+        lastToolCategory = "error";
+        lastToolError = message;
+        pushToolMessage(messages, deepseekToolMessages, results, toolName, toolCallId, content, "error");
+        emitTrace(options, state, {
+          stage: "game_toolnode",
+          title: "等待工具被跳过",
+          message,
+          toolName,
+          status: "error"
+        });
+        continue;
+      }
+
+      const limitError = toolLimitError(toolName, {
+        expressCallCount,
+        recentChatLookupCount,
+        metadataCallCount
+      });
+      if (limitError) {
+        const content = JSON.stringify({ error: limitError });
+        lastToolCategory = "error";
+        lastToolError = limitError;
+        pushToolMessage(messages, deepseekToolMessages, results, toolName, toolCallId, content, "error");
+        emitTrace(options, state, {
+          stage: "game_toolnode",
+          title: "工具次数被限制",
+          message: `${toolName} 被跳过：${limitError}`,
+          toolName,
+          status: "error"
         });
         continue;
       }
@@ -455,6 +536,9 @@ export function createGameSubgraph(options: CreateGameSubgraphOptions) {
           resultSummary
         });
 
+        if (toolName === "express") expressCallCount += 1;
+        if (toolName === "get_recent_chat_messages") recentChatLookupCount += 1;
+        if (METADATA_TOOLS.has(toolName)) metadataCallCount += 1;
         lastToolCategory = category;
         lastToolError = undefined;
         pushToolMessage(messages, deepseekToolMessages, results, toolName, toolCallId, content, "success");
@@ -491,7 +575,7 @@ export function createGameSubgraph(options: CreateGameSubgraphOptions) {
       messages,
       toolResults: results,
       toolLoopCount: state.toolLoopCount + 1,
-      expressedDecision,
+      expressedDecision: expressedDecision ?? state.expressedDecision,
       lastToolCategory,
       lastToolError,
       gameActionExecuted: actionExecuted
@@ -627,7 +711,48 @@ function gameSystemPrompt(config: AppConfig, state: AgentGraphState): string {
 
 ${STS2_MCP_PLAYER_POLICY}
 
-你现在运行在 LangGraph game_subgraph 中。每一轮 invocation 最多允许一个 act；act 后系统会进入状态评估并等待下一次 game tick。
+你现在运行在 LangGraph game_subgraph 中。每轮 game_subgraph 的目标是：基于 preload_game_snapshot 已经读取到的 gameState 和 availableActions，快速做出一轮游戏决策。
+
+核心节奏：
+1. 每轮最多一个 act。
+2. 每轮最多调用一次 express。
+3. 每轮最多调用一次 get_recent_chat_messages。
+4. 每轮最多调用一次 metadata 类工具。
+5. 如果 availableActions 非空，不要调用 wait_until_actionable。
+6. 如果 gameState 和 availableActions 已经足够，不要重复调用 get_game_state / get_available_actions。
+7. 如果不需要解释，直接 act。
+8. 如果需要回应观众或说明计划，只说一句短话，然后尽快 act。
+
+直播说话规则：
+- 任何面向观众的内容都必须调用 express。
+- 不要把面向观众的话只写在 assistant content 里；assistant content 不会被 overlay/TTS 播放。
+- 每轮最多说一次。
+- 如果 invocationControl.alreadySpokeThisInvocation=true，本轮不要再调用 express，下一步优先 act 或结束。
+- 如果要一边说话一边操作：先 express，express 返回后再 act。
+
+观众信息规则：
+- audienceContext 已经包含最近弹幕和礼物摘要。
+- 如果 audienceContext.recentMessages 已经足够，不要调用 get_recent_chat_messages。
+- 只有当观众意图不清楚、需要确认建议或投票倾向时，才调用 get_recent_chat_messages。
+- 每轮最多调用一次 get_recent_chat_messages。
+- 查看弹幕后不要继续闲聊，应该尽快 act。
+
+行动规则：
+- 只能执行 availableActions 中存在的动作。
+- act 前重新根据当前 availableActions 计算 index。
+- 不复用旧 index。
+- act 后本轮停止操作，进入 evaluate_game_status。
+- 如果无法确定最优动作，选择一个合理且安全的动作，不要无限观察。
+
+推荐流程：
+- 常规战斗：preload -> act
+- 需要解释：preload -> express -> act
+- 需要观众意见：preload -> get_recent_chat_messages -> express 或 act -> act
+- 需要资料：preload -> get_relevant_game_data -> express 或 act -> act
+
+避免流程：
+- metadata -> metadata -> recent_chat -> express -> wait_until_actionable -> act
+
 不要输出 Markdown。内部分析使用中文；通过 express 给观众说话时，textJa 使用自然日语，textZh 使用中文。`;
 }
 
@@ -639,6 +764,14 @@ function gameInput(state: AgentGraphState): string {
       availableActions: state.availableActions,
       observedAt: state.observedAt,
       gameSession: state.gameSession,
+      invocationControl: {
+        toolLoopCount: state.toolLoopCount,
+        alreadySpokeThisInvocation: Boolean(state.expressedDecision),
+        alreadyActedThisInvocation: Boolean(state.gameActionExecuted),
+        maxExpressPerInvocation: 1,
+        maxRecentChatLookupsPerInvocation: 1,
+        maxActPerInvocation: 1
+      },
       lastToolError: state.lastToolError
     },
     null,
@@ -684,6 +817,10 @@ function deepSeekMessageToAIMessage(message: DeepSeekMessage): AIMessage {
 function hasToolCalls(state: AgentGraphState): boolean {
   const last = getLastDeepSeekAssistantMessage(state);
   return Boolean(last?.tool_calls?.length);
+}
+
+function getLastDeepSeekMessage(state: AgentGraphState): DeepSeekMessage | undefined {
+  return state.deepseekMessages.at(-1);
 }
 
 function getLastDeepSeekAssistantMessage(state: AgentGraphState): DeepSeekMessage | undefined {
@@ -785,6 +922,33 @@ function categoryForTool(toolName: string): ToolCategory {
   if (EXPRESS_TOOLS.has(toolName)) return "express";
   if (GAME_ACTION_TOOLS.has(toolName)) return "game_action";
   return "control";
+}
+
+function countToolResults(state: AgentGraphState, names: Set<string>): number {
+  return state.toolResults.filter((result) => names.has(result.name)).length;
+}
+
+function toolLimitError(
+  toolName: string,
+  counts: {
+    expressCallCount: number;
+    recentChatLookupCount: number;
+    metadataCallCount: number;
+  }
+): string | undefined {
+  if (toolName === "express" && counts.expressCallCount >= 1) {
+    return "本轮最多调用一次 express";
+  }
+
+  if (toolName === "get_recent_chat_messages" && counts.recentChatLookupCount >= 1) {
+    return "本轮最多调用一次 get_recent_chat_messages";
+  }
+
+  if (METADATA_TOOLS.has(toolName) && counts.metadataCallCount >= 1) {
+    return "本轮最多调用一次 metadata 类工具";
+  }
+
+  return undefined;
 }
 
 function parseExpressDecision(content: string): AgentDecision | undefined {

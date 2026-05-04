@@ -259,6 +259,7 @@ export class GraphAgentRuntime {
     const previousMode = this.runtimeMode;
     this.runtimeMode = result.mode ?? this.runtimeMode;
     this.gameSession = result.gameSession ?? this.gameSession;
+    const switchedIntoGameMode = previousMode !== "game" && this.runtimeMode === "game";
     const shouldScheduleNextGameStep = this.shouldScheduleNextGameStep(result);
     if (previousMode !== this.runtimeMode) {
       this.debugControl?.setMode(this.runtimeMode);
@@ -318,7 +319,7 @@ export class GraphAgentRuntime {
     });
 
     if (shouldScheduleNextGameStep) {
-      this.enqueueGameStep(bus, "after-action");
+      this.enqueueGameStep(bus, switchedIntoGameMode ? "manual" : "after-action");
     }
 
     if (result.expressedDecision) {
@@ -482,7 +483,7 @@ export class GraphAgentRuntime {
       shouldRespond: () => true,
       chatTools: this.getChatTools(),
       gameTools: this.getGameTools(),
-      maxToolLoops: this.config.sts2Mcp.allowActions ? 4 : 2
+      maxToolLoops: 3
     });
   }
 

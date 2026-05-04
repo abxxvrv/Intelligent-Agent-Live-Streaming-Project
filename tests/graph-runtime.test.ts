@@ -115,7 +115,7 @@ describe("GraphAgentRuntime debug input filtering", () => {
 
     await vi.waitFor(() => expect(runtime.runtimeMode).toBe("game"));
     await vi.waitFor(() => expect(queuedGameTicks.length).toBeGreaterThan(0));
-    expect((queuedGameTicks[0].detail as { reason?: string }).reason).toBe("after-action");
+    expect((queuedGameTicks[0].detail as { reason?: string }).reason).toBe("manual");
     await agent.stop();
   });
 
