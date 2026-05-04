@@ -1,10 +1,18 @@
+import { appendFileSync, mkdirSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { inspect } from "node:util";
 import OpenAI from "openai";
 import { AIMessage, ToolMessage } from "@langchain/core/messages";
 import type { StructuredToolInterface } from "@langchain/core/tools";
 import { convertToOpenAITool } from "@langchain/core/utils/function_calling";
 import { END, START, StateGraph } from "@langchain/langgraph";
 import type { AppConfig } from "../../config.js";
-import type { AgentDecision, AgentReplyEvent, AgentTraceEvent, ToolCallEvent } from "../../types.js";
+import type {
+  AgentDecision,
+  AgentReplyEvent,
+  AgentTraceEvent,
+  ToolCallEvent
+} from "../../types.js";
 import { newId } from "../../utils/id.js";
 import { Logger } from "../../utils/logger.js";
 import { normalizeDecision } from "../LLMClient.js";
@@ -16,7 +24,7 @@ import {
   type DeepSeekToolCall,
   type ToolResult
 } from "./AgentState.js";
-import { STS2_MCP_PLAYER_POLICY } from "./prompts/sts2McpPlayerPrompt.js";
+import { STS2_MCP_GAME_PLAYER_POLICY } from "./prompts/sts2McpPlayerPrompt.js";
 
 type ToolCategory = "observe" | "metadata" | "express" | "game_action" | "control" | "error";
 
@@ -29,9 +37,11 @@ export type CreateGameSubgraphOptions = {
   onToolCall?: (event: ToolCallEvent) => void;
   onReply?: (event: AgentReplyEvent) => void;
   onTrace?: (event: AgentTraceEvent) => void;
+  waitForReplyPlayback?: (replyId: string, timeoutMs?: number) => Promise<void>;
 };
 
 const logger = new Logger("game-subgraph");
+const gameRawMessageLogFilePath = resolve(process.cwd(), "logs", "game-agent-raw-messages.log");
 
 const OBSERVE_TOOLS = new Set([
   "get_game_state",
@@ -43,7 +53,6 @@ const OBSERVE_TOOLS = new Set([
 const METADATA_TOOLS = new Set(["get_relevant_game_data", "get_game_data_item", "get_game_data_items"]);
 const EXPRESS_TOOLS = new Set(["express"]);
 const GAME_ACTION_TOOLS = new Set(["act"]);
-const ASSISTANT_CONTENT_REQUIRES_EXPRESS_ERROR = "assistant content requires express before act";
 
 export function createGameSubgraph(options: CreateGameSubgraphOptions) {
   const activeLogger = options.logger || logger;
@@ -185,6 +194,7 @@ export function createGameSubgraph(options: CreateGameSubgraphOptions) {
         role: "assistant",
         content: ""
       };
+      appendGameRawMessageLog(state, rawMessage, "no-client");
       return {
         deepseekMessages: [rawMessage],
         messages: [deepSeekMessageToAIMessage(rawMessage)]
@@ -211,6 +221,7 @@ export function createGameSubgraph(options: CreateGameSubgraphOptions) {
       } as any);
 
       const rawMessage = normalizeDeepSeekAssistantMessage(response.choices[0]?.message);
+      appendGameRawMessageLog(state, rawMessage, "llm-response");
       const toolCallNames = (rawMessage.tool_calls || []).map((call) => getDeepSeekToolCallName(call)).filter(Boolean);
       const content = getDeepSeekMessageContent(rawMessage).trim();
       const hasExpressCall = (rawMessage.tool_calls || []).some(
@@ -236,31 +247,11 @@ export function createGameSubgraph(options: CreateGameSubgraphOptions) {
       if (content && !hasExpressCall) {
         emitTrace(options, state, {
           stage: "game_agent_node",
-          title: "需要先调用 express",
-          message: "模型写了面向观众的内容，但没有调用 express；本轮禁止直接执行旧 act。",
-          status: "error",
+          title: "assistant content 未经 express",
+          message: "模型写了 assistant content，但本轮不拦截，继续执行模型原始工具调用。",
+          status: "warning",
           detail: content.slice(0, 240)
         });
-
-        return {
-          deepseekMessages: [
-            {
-              role: "user",
-              content: [
-                "你刚才写了面向观众的内容，但没有调用 express。",
-                "这些内容不会被 overlay/TTS 播放。",
-                "请先调用 express 输出这段内容。",
-                "不要在这一步调用 act；express 返回后再决定是否行动。",
-                "",
-                `需要播报的内容：${content}`
-              ].join("\n")
-            }
-          ],
-          messages: [],
-          toolLoopCount: state.toolLoopCount + 1,
-          lastToolCategory: "error",
-          lastToolError: ASSISTANT_CONTENT_REQUIRES_EXPRESS_ERROR
-        };
       }
 
       for (const call of rawMessage.tool_calls || []) {
@@ -276,10 +267,11 @@ export function createGameSubgraph(options: CreateGameSubgraphOptions) {
         });
       }
 
-      return {
+      const update: AgentGraphUpdate = {
         deepseekMessages: [rawMessage],
         messages: [deepSeekMessageToAIMessage(rawMessage)]
       };
+      return update;
     } catch (error) {
       const message = errorMessage(error);
       activeLogger.warn("game llm failed", {
@@ -292,13 +284,13 @@ export function createGameSubgraph(options: CreateGameSubgraphOptions) {
         message,
         status: "error"
       });
+      const rawMessage: DeepSeekMessage = {
+        role: "assistant",
+        content: ""
+      };
+      appendGameRawMessageLog(state, rawMessage, "llm-error-fallback");
       return {
-        deepseekMessages: [
-          {
-            role: "assistant",
-            content: ""
-          }
-        ],
+        deepseekMessages: [rawMessage],
         lastToolCategory: "error",
         lastToolError: message
       };
@@ -307,13 +299,6 @@ export function createGameSubgraph(options: CreateGameSubgraphOptions) {
 
   const routeAfterGameAgent = (state: AgentGraphState) => {
     if (state.mode !== "game") return "evaluate_game_status";
-    if (
-      getLastDeepSeekMessage(state)?.role === "user" &&
-      state.lastToolError === ASSISTANT_CONTENT_REQUIRES_EXPRESS_ERROR &&
-      state.toolLoopCount < maxToolLoops
-    ) {
-      return "game_agent_node";
-    }
     if (!hasToolCalls(state)) return "evaluate_game_status";
     if (state.toolLoopCount >= maxToolLoops) {
       emitTrace(options, state, {
@@ -497,13 +482,35 @@ export function createGameSubgraph(options: CreateGameSubgraphOptions) {
 
         if (currentExpressedDecision && !expressedDecision) {
           expressedDecision = currentExpressedDecision;
+          const replyId = newId("reply");
+          const playbackPromise = options.waitForReplyPlayback?.(replyId, 30_000) ?? Promise.resolve();
+
           options.onReply?.({
             type: "agent-reply",
-            id: newId("reply"),
+            id: replyId,
             ts: Date.now(),
             sourceEventId: state.inputEvent.id,
             decision: currentExpressedDecision
           });
+
+          try {
+            await playbackPromise;
+            emitTrace(options, state, {
+              stage: "game_toolnode",
+              title: "express 语音播放完成",
+              message: "overlay 已确认播放结束，继续后续流程。",
+              toolName,
+              status: "success"
+            });
+          } catch (error) {
+            emitTrace(options, state, {
+              stage: "game_toolnode",
+              title: "express 语音等待失败",
+              message: errorMessage(error),
+              toolName,
+              status: "warning"
+            });
+          }
         }
 
         if (toolName === "act") {
@@ -707,53 +714,13 @@ function buildGameDeepSeekMessages(config: AppConfig, state: AgentGraphState): D
 
 function gameSystemPrompt(config: AppConfig, state: AgentGraphState): string {
   const persona = config.agent.persona || state.persona;
-  return `${persona}
+  return `
+${persona}
 
-${STS2_MCP_PLAYER_POLICY}
+${STS2_MCP_GAME_PLAYER_POLICY}
 
-你现在运行在 LangGraph game_subgraph 中。每轮 game_subgraph 的目标是：基于 preload_game_snapshot 已经读取到的 gameState 和 availableActions，快速做出一轮游戏决策。
-
-核心节奏：
-1. 每轮最多一个 act。
-2. 每轮最多调用一次 express。
-3. 每轮最多调用一次 get_recent_chat_messages。
-4. 每轮最多调用一次 metadata 类工具。
-5. 如果 availableActions 非空，不要调用 wait_until_actionable。
-6. 如果 gameState 和 availableActions 已经足够，不要重复调用 get_game_state / get_available_actions。
-7. 如果不需要解释，直接 act。
-8. 如果需要回应观众或说明计划，只说一句短话，然后尽快 act。
-
-直播说话规则：
-- 任何面向观众的内容都必须调用 express。
-- 不要把面向观众的话只写在 assistant content 里；assistant content 不会被 overlay/TTS 播放。
-- 每轮最多说一次。
-- 如果 invocationControl.alreadySpokeThisInvocation=true，本轮不要再调用 express，下一步优先 act 或结束。
-- 如果要一边说话一边操作：先 express，express 返回后再 act。
-
-观众信息规则：
-- audienceContext 已经包含最近弹幕和礼物摘要。
-- 如果 audienceContext.recentMessages 已经足够，不要调用 get_recent_chat_messages。
-- 只有当观众意图不清楚、需要确认建议或投票倾向时，才调用 get_recent_chat_messages。
-- 每轮最多调用一次 get_recent_chat_messages。
-- 查看弹幕后不要继续闲聊，应该尽快 act。
-
-行动规则：
-- 只能执行 availableActions 中存在的动作。
-- act 前重新根据当前 availableActions 计算 index。
-- 不复用旧 index。
-- act 后本轮停止操作，进入 evaluate_game_status。
-- 如果无法确定最优动作，选择一个合理且安全的动作，不要无限观察。
-
-推荐流程：
-- 常规战斗：preload -> act
-- 需要解释：preload -> express -> act
-- 需要观众意见：preload -> get_recent_chat_messages -> express 或 act -> act
-- 需要资料：preload -> get_relevant_game_data -> express 或 act -> act
-
-避免流程：
-- metadata -> metadata -> recent_chat -> express -> wait_until_actionable -> act
-
-不要输出 Markdown。内部分析使用中文；通过 express 给观众说话时，textJa 使用自然日语，textZh 使用中文。`;
+每次的流程为：如果你认为有必要，可以获取观众的弹幕；然后结合当前的游戏状态，和你认为的下一步行动，跟观众说话，最后再进行游戏行动。
+`;
 }
 
 function gameInput(state: AgentGraphState): string {
@@ -768,7 +735,6 @@ function gameInput(state: AgentGraphState): string {
         toolLoopCount: state.toolLoopCount,
         alreadySpokeThisInvocation: Boolean(state.expressedDecision),
         alreadyActedThisInvocation: Boolean(state.gameActionExecuted),
-        maxExpressPerInvocation: 1,
         maxRecentChatLookupsPerInvocation: 1,
         maxActPerInvocation: 1
       },
@@ -817,10 +783,6 @@ function deepSeekMessageToAIMessage(message: DeepSeekMessage): AIMessage {
 function hasToolCalls(state: AgentGraphState): boolean {
   const last = getLastDeepSeekAssistantMessage(state);
   return Boolean(last?.tool_calls?.length);
-}
-
-function getLastDeepSeekMessage(state: AgentGraphState): DeepSeekMessage | undefined {
-  return state.deepseekMessages.at(-1);
 }
 
 function getLastDeepSeekAssistantMessage(state: AgentGraphState): DeepSeekMessage | undefined {
@@ -1075,6 +1037,32 @@ function summarizeToolContent(content: string): string {
   if (compact.length <= 420) return compact;
 
   return `${compact.slice(0, 420)}...`;
+}
+
+function appendGameRawMessageLog(state: AgentGraphState, rawMessage: DeepSeekMessage, reason: string): void {
+  try {
+    mkdirSync(dirname(gameRawMessageLogFilePath), { recursive: true });
+    const payload = {
+      ts: new Date().toISOString(),
+      reason,
+      runId: state.runId,
+      sourceEventId: state.inputEvent?.id,
+      sourceEventType: state.inputEvent?.type,
+      rawMessage
+    };
+    appendFileSync(
+      gameRawMessageLogFilePath,
+      `${inspect(payload, {
+        depth: null,
+        colors: false,
+        maxArrayLength: null,
+        maxStringLength: null
+      })}\n\n`,
+      "utf8"
+    );
+  } catch (error) {
+    logger.warn("unable to write game agent raw message log", error);
+  }
 }
 
 function compactDetail(value: unknown): unknown {

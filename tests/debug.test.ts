@@ -5,6 +5,7 @@ import { DebugControl } from "../src/debug/DebugControl.js";
 import { EventBus } from "../src/events/EventBus.js";
 import { OverlayServer } from "../src/obs-overlay/OverlayServer.js";
 import type { RuntimeEvent } from "../src/types.js";
+import { VoicePlaybackBarrier } from "../src/voice/VoicePlaybackBarrier.js";
 import type { TtsStreamProvider } from "../src/voice/TtsEngine.js";
 
 describe("debug control API", () => {
@@ -105,7 +106,43 @@ describe("debug control API", () => {
     expect(body.toString("utf8")).toBe("RIFF");
   });
 
-  async function startDebugServer(port: number, ttsStreamProvider?: TtsStreamProvider) {
+  it("accepts voice playback acknowledgements and releases the barrier", async () => {
+    const barrier = new VoicePlaybackBarrier();
+    const { baseUrl } = await startDebugServer(31806, undefined, barrier);
+    const waitPromise = barrier.wait("reply_test", 1_000);
+
+    const response = await fetch(`${baseUrl}/api/voice/playback`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ replyId: "reply_test", voiceId: "voice_test", status: "ended" })
+    });
+    const body = await response.json();
+
+    await waitPromise;
+    expect(response.ok).toBe(true);
+    expect(body.ok).toBe(true);
+  });
+
+  it("rejects voice playback acknowledgements without a replyId", async () => {
+    const { baseUrl } = await startDebugServer(31807);
+
+    const response = await fetch(`${baseUrl}/api/voice/playback`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ voiceId: "voice_test", status: "ended" })
+    });
+    const body = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(body.ok).toBe(false);
+    expect(body.error).toBe("replyId is required");
+  });
+
+  async function startDebugServer(
+    port: number,
+    ttsStreamProvider?: TtsStreamProvider,
+    voicePlaybackBarrier?: VoicePlaybackBarrier
+  ) {
     const baseUrl = `http://127.0.0.1:${port}`;
     const config = {
       ...loadConfig(["node", "test", "--mock"]),
@@ -115,7 +152,14 @@ describe("debug control API", () => {
     };
     const bus = new EventBus();
     const control = new DebugControl();
-    const server = new OverlayServer(config, bus, resolve(process.cwd(), "public"), control, ttsStreamProvider);
+    const server = new OverlayServer(
+      config,
+      bus,
+      resolve(process.cwd(), "public"),
+      control,
+      ttsStreamProvider,
+      voicePlaybackBarrier
+    );
     servers.push(server);
     await server.start();
     return { baseUrl, bus, control };

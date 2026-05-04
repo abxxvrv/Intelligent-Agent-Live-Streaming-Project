@@ -39,6 +39,7 @@ export type CreateAgentGraphOptions = {
   onToolCall?: (event: ToolCallEvent) => void;
   onReply?: (event: AgentReplyEvent) => void;
   onTrace?: (event: AgentTraceEvent) => void;
+  waitForReplyPlayback?: (replyId: string, timeoutMs?: number) => Promise<void>;
 
   /**
    * Debug: 把 DeepSeek 原始响应写入本地日志文件。
@@ -72,7 +73,8 @@ export function createAgentGraph(options: CreateAgentGraphOptions) {
     canUseSts2Actions: options.canUseSts2Actions,
     onToolCall: options.onToolCall,
     onReply: options.onReply,
-    onTrace: options.onTrace
+    onTrace: options.onTrace,
+    waitForReplyPlayback: options.waitForReplyPlayback
   });
 
   const eventRouter = async (state: AgentGraphState): Promise<AgentGraphUpdate> => {

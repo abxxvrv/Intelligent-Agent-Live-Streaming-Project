@@ -37,7 +37,7 @@ export function createExpressTool(): StructuredToolInterface {
     {
       name: "express",
       description:
-        "通用表达工具。用严格 JSON 参数给出日文朗读文本 textJa、对应中文字幕 textZh、表情和动作；调用后系统会用 textJa 进行 TTS 播放，并让 overlay 显示中日双语字幕。普通可见回复优先使用这个工具。",
+        "通用表达工具。用严格 JSON 参数给出日文朗读文本 textJa、对应中文字幕 textZh、表情和动作；普通可见回复优先使用这个工具。",
       schema: z.object({
         textJa: z.string().trim().min(1).max(180),
         textZh: z.string().trim().min(1).max(180),

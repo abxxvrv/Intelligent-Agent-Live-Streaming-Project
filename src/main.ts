@@ -8,6 +8,7 @@ import { createGameClient } from "./game-sts2/createGameClient.js";
 import { GamePoller } from "./game-sts2/GamePoller.js";
 import { OverlayServer } from "./obs-overlay/OverlayServer.js";
 import { createTtsEngine, isStreamingTtsEngine } from "./voice/TtsEngine.js";
+import { VoicePlaybackBarrier } from "./voice/VoicePlaybackBarrier.js";
 import { VoiceRuntime } from "./voice/VoiceRuntime.js";
 import { Logger } from "./utils/logger.js";
 
@@ -20,10 +21,18 @@ const debugControl = new DebugControl();
 const liveSource = createLiveSource(config);
 const gameClient = createGameClient(config);
 const gamePoller = config.gamePollingEnabled ? new GamePoller(gameClient) : undefined;
-const agent = new GraphAgentRuntime(config, debugControl);
+const voicePlaybackBarrier = new VoicePlaybackBarrier();
+const agent = new GraphAgentRuntime(config, debugControl, voicePlaybackBarrier);
 const tts = createTtsEngine(config);
 const voice = new VoiceRuntime(tts);
-const overlay = new OverlayServer(config, bus, publicDir, debugControl, isStreamingTtsEngine(tts) ? tts : undefined);
+const overlay = new OverlayServer(
+  config,
+  bus,
+  publicDir,
+  debugControl,
+  isStreamingTtsEngine(tts) ? tts : undefined,
+  voicePlaybackBarrier
+);
 
 agent.start(bus);
 voice.start(bus);

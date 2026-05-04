@@ -7,6 +7,7 @@ import type { EventBus } from "../events/EventBus.js";
 import type { OverlayEvent, RuntimeEvent } from "../types.js";
 import { newId } from "../utils/id.js";
 import { Logger } from "../utils/logger.js";
+import type { VoicePlaybackBarrier } from "../voice/VoicePlaybackBarrier.js";
 import type { TtsStreamProvider } from "../voice/TtsEngine.js";
 
 const MIME_TYPES: Record<string, string> = {
@@ -36,6 +37,7 @@ export class OverlayServer {
     private readonly publicDir: string,
     private readonly debugControl?: DebugControl,
     private readonly ttsStreamProvider?: TtsStreamProvider,
+    private readonly voicePlaybackBarrier?: VoicePlaybackBarrier,
     private readonly live2dRuntimeDir = join(process.cwd(), "live2d", "runtime")
   ) {}
 
@@ -94,6 +96,10 @@ export class OverlayServer {
         events: this.history,
         ts: Date.now()
       });
+      return;
+    }
+    if (url.pathname === "/api/voice/playback" && request.method === "POST") {
+      await this.handleVoicePlayback(request, response);
       return;
     }
     if (url.pathname === "/api/events") {
@@ -206,6 +212,27 @@ export class OverlayServer {
     };
     this.bus.publish(event);
     sendJson(response, { ok: true, mode: nextMode });
+  }
+
+  private async handleVoicePlayback(request: IncomingMessage, response: ServerResponse): Promise<void> {
+    const body = await readJsonBody(request);
+    const replyId = stringField(body, "replyId");
+    const voiceId = stringField(body, "voiceId");
+    const status = stringField(body, "status");
+
+    if (!replyId) {
+      sendJson(response, { ok: false, error: "replyId is required" }, 400);
+      return;
+    }
+
+    this.logger.info("voice playback ack received", {
+      replyId,
+      voiceId,
+      status
+    });
+
+    this.voicePlaybackBarrier?.complete(replyId);
+    sendJson(response, { ok: true });
   }
 
   private handleSse(response: ServerResponse): void {

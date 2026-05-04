@@ -35,6 +35,7 @@ let live2dAdapter = null;
 let live2dReady = false;
 let subtitleClearTimer = null;
 let currentAudio = null;
+let currentVoiceEvent = null;
 let subtitleTypeTimer = null;
 const voiceQueue = [];
 let voicePlaying = false;
@@ -90,6 +91,9 @@ function connectEvents() {
 
     if (event.status === "error") {
       console.warn("TTS error", event.error);
+      if (!hasQueuedOrPlayingReply(event.replyId)) {
+        notifyVoicePlaybackFinished(event, "error", event.error);
+      }
     }
   });
 }
@@ -119,6 +123,7 @@ function playNextVoice() {
   }
 
   voicePlaying = true;
+  currentVoiceEvent = next;
   console.info("voice playback started", {
     id: next.id,
     audioUrl: next.audioUrl || "",
@@ -150,6 +155,7 @@ function finishCurrentVoice(event, status, error) {
 
   voicePlaying = false;
   currentAudio = null;
+  currentVoiceEvent = null;
   setAvatar({
     emotion: event.emotion || currentEmotion,
     action: "idle",
@@ -157,7 +163,33 @@ function finishCurrentVoice(event, status, error) {
   });
   scheduleSubtitleClear();
   logVoiceQueueLength();
+  notifyVoicePlaybackFinished(event, status, error);
   playNextVoice();
+}
+
+function hasQueuedOrPlayingReply(replyId) {
+  if (!replyId) return false;
+  if (currentVoiceEvent?.replyId === replyId) return true;
+  return voiceQueue.some((event) => event.replyId === replyId);
+}
+
+async function notifyVoicePlaybackFinished(event, status, error) {
+  if (!event.replyId) return;
+
+  try {
+    await fetch("/api/voice/playback", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        replyId: event.replyId,
+        voiceId: event.id,
+        status,
+        error: error || null
+      })
+    });
+  } catch (err) {
+    console.warn("failed to notify voice playback finished", err);
+  }
 }
 
 function logVoiceQueueLength() {
@@ -186,7 +218,7 @@ function playQueuedVoiceSimulation(event) {
   });
   const durationMs = event.simulatedDurationMs || estimateVoiceDurationMs(ja);
   setTimeout(() => {
-    finishCurrentVoice(event, "ended");
+    finishCurrentVoice(event, "simulated");
   }, durationMs);
 }
 

@@ -5,6 +5,7 @@ import { createMcpLangChainTools } from "../mcp/mcpToolBridge.js";
 import { StdioMcpClient } from "../mcp/StdioMcpClient.js";
 import type { StructuredToolInterface } from "@langchain/core/tools";
 import type { AgentDecision, InputEvent } from "../types.js";
+import type { VoicePlaybackBarrier } from "../voice/VoicePlaybackBarrier.js";
 import { newId } from "../utils/id.js";
 import { Logger } from "../utils/logger.js";
 import { AutoplayRunner } from "./autoplay/AutoplayRunner.js";
@@ -40,7 +41,8 @@ export class GraphAgentRuntime {
 
   constructor(
     private readonly config: AppConfig,
-    private readonly debugControl?: DebugControl
+    private readonly debugControl?: DebugControl,
+    private readonly voicePlaybackBarrier?: VoicePlaybackBarrier
   ) {
     this.memory = new Memory(config.agent.maxRecentDanmaku);
     this.graph = this.createGraph();
@@ -477,6 +479,8 @@ export class GraphAgentRuntime {
       onToolCall: (event) => this.bus?.publish(event),
       onReply: (event) => this.bus?.publish(event),
       onTrace: (event) => this.bus?.publish(event),
+      waitForReplyPlayback: (replyId, timeoutMs) =>
+        this.voicePlaybackBarrier?.wait(replyId, timeoutMs) ?? Promise.resolve(),
       debugDeepSeekRawOutput: true,
       debugDeepSeekRawOutputIncludeReasoning: true,
       debugDeepSeekRawOutputToTrace: false,

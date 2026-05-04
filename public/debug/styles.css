@@ -261,6 +261,10 @@ textarea {
   color: var(--rose);
 }
 
+.badge.trace-warning {
+  color: var(--amber);
+}
+
 .badge.trace-tool-intent,
 .badge.trace-llm-message {
   color: var(--amber);

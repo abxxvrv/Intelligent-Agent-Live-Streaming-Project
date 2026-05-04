@@ -116,6 +116,7 @@ export type AgentReplyEvent = {
 export type VoiceEvent = {
   type: "voice";
   id: string;
+  replyId?: string;
   ts: number;
   status: "start" | "end" | "error";
   text?: string;
@@ -172,7 +173,7 @@ export type AgentTraceEvent = {
   title: string;
   message: string;
   toolName?: string;
-  status?: "start" | "success" | "error";
+  status?: "start" | "success" | "warning" | "error";
   detail?: unknown;
 };
 

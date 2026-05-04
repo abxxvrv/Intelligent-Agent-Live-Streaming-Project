@@ -20,14 +20,19 @@ export class VoiceRuntime {
 
       this.queue = this.queue
         .then(() =>
-          this.speak(bus, text, {
-            emotion: event.decision.emotion,
-            action: event.decision.avatarAction,
-            speaking: true,
+          this.speak(
+            bus,
             text,
-            subtitleJa: event.decision.subtitleJa || text,
-            subtitleZh: event.decision.subtitleZh || ""
-          })
+            {
+              emotion: event.decision.emotion,
+              action: event.decision.avatarAction,
+              speaking: true,
+              text,
+              subtitleJa: event.decision.subtitleJa || text,
+              subtitleZh: event.decision.subtitleZh || ""
+            },
+            event.id
+          )
         )
         .catch((error) => {
           const message = error instanceof Error ? error.message : String(error);
@@ -36,9 +41,9 @@ export class VoiceRuntime {
     });
   }
 
-  private async speak(bus: EventBus, text: string, command: AvatarCommand): Promise<void> {
+  private async speak(bus: EventBus, text: string, command: AvatarCommand, replyId?: string): Promise<void> {
     if (isStreamingTtsEngine(this.tts)) {
-      await this.speakWithBrowserStream(this.tts, bus, text, command);
+      await this.speakWithBrowserStream(this.tts, bus, text, command, replyId);
       return;
     }
 
@@ -51,6 +56,7 @@ export class VoiceRuntime {
     bus.publish({
       type: "voice",
       id: newId("voice"),
+      replyId,
       ts: Date.now(),
       status: "start",
       text,
@@ -66,6 +72,7 @@ export class VoiceRuntime {
       bus.publish({
         type: "voice",
         id: newId("voice"),
+        replyId,
         ts: Date.now(),
         status: "end",
         text,
@@ -78,6 +85,7 @@ export class VoiceRuntime {
       bus.publish({
         type: "voice",
         id: newId("voice"),
+        replyId,
         ts: Date.now(),
         status: "error",
         text,
@@ -105,7 +113,8 @@ export class VoiceRuntime {
     tts: StreamingTtsEngine,
     bus: EventBus,
     text: string,
-    command: AvatarCommand
+    command: AvatarCommand,
+    replyId?: string
   ): Promise<void> {
     try {
       const stream = await tts.createStream(text, {
@@ -116,6 +125,7 @@ export class VoiceRuntime {
       bus.publish({
         type: "voice",
         id: newId("voice"),
+        replyId,
         ts: Date.now(),
         status: "start",
         text,
@@ -131,6 +141,7 @@ export class VoiceRuntime {
       bus.publish({
         type: "voice",
         id: newId("voice"),
+        replyId,
         ts: Date.now(),
         status: "error",
         text,
