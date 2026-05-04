@@ -7,7 +7,7 @@ import { createLiveSource } from "./bili-live/createLiveSource.js";
 import { createGameClient } from "./game-sts2/createGameClient.js";
 import { GamePoller } from "./game-sts2/GamePoller.js";
 import { OverlayServer } from "./obs-overlay/OverlayServer.js";
-import { SystemTtsEngine } from "./voice/TtsEngine.js";
+import { createTtsEngine, isStreamingTtsEngine } from "./voice/TtsEngine.js";
 import { VoiceRuntime } from "./voice/VoiceRuntime.js";
 import { Logger } from "./utils/logger.js";
 
@@ -19,14 +19,15 @@ const bus = new EventBus();
 const debugControl = new DebugControl();
 const liveSource = createLiveSource(config);
 const gameClient = createGameClient(config);
-const gamePoller = new GamePoller(gameClient);
+const gamePoller = config.gamePollingEnabled ? new GamePoller(gameClient) : undefined;
 const agent = new GraphAgentRuntime(config, debugControl);
-const voice = new VoiceRuntime(new SystemTtsEngine(config));
-const overlay = new OverlayServer(config, bus, publicDir, debugControl);
+const tts = createTtsEngine(config);
+const voice = new VoiceRuntime(tts);
+const overlay = new OverlayServer(config, bus, publicDir, debugControl, isStreamingTtsEngine(tts) ? tts : undefined);
 
 agent.start(bus);
 voice.start(bus);
-gamePoller.start(bus);
+gamePoller?.start(bus);
 await overlay.start();
 await liveSource.start(bus);
 
@@ -40,7 +41,7 @@ logger.info("STS2 live agent is running", {
 const shutdown = async () => {
   logger.info("shutting down");
   await agent.stop();
-  gamePoller.stop();
+  gamePoller?.stop();
   await liveSource.stop();
   await overlay.stop();
   process.exit(0);

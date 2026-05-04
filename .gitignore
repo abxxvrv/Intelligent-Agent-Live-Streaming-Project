@@ -5,6 +5,9 @@ dist/
 coverage/
 npm-debug.log*
 *.local
+logs/
+outputs/
+selected-code-files.txt
 mcp_probe.log
 *.mcp_probe.log
 tests/.tmp/

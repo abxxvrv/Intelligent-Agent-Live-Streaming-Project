@@ -1,12 +1,12 @@
 export class DebugControl {
-  private autoplayEnabled = false;
+  private mode: "chat" | "game" = "chat";
 
-  isAutoplayEnabled(): boolean {
-    return this.autoplayEnabled;
+  getMode(): "chat" | "game" {
+    return this.mode;
   }
 
-  setAutoplayEnabled(enabled: boolean): boolean {
-    this.autoplayEnabled = enabled;
-    return this.autoplayEnabled;
+  setMode(mode: "chat" | "game"): "chat" | "game" {
+    this.mode = mode;
+    return this.mode;
   }
 }

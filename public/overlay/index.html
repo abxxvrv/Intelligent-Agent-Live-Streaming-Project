@@ -16,6 +16,47 @@
       <section class="chat-panel" id="chatPanel">
         <div class="panel-title">弹幕</div>
         <div class="danmaku-list" id="danmakuList"></div>
+        <form class="overlay-composer" id="overlayComposer">
+          <div class="overlay-form-row">
+            <label>
+              <span>类型</span>
+              <select id="overlayEventType" name="eventType">
+                <option value="danmaku" selected>弹幕</option>
+                <option value="gift">礼物</option>
+              </select>
+            </label>
+            <label>
+              <span>用户</span>
+              <input id="overlayUserInput" name="user" value="调试员" maxlength="24" />
+            </label>
+          </div>
+          <label class="overlay-message-field" id="overlayMessageField">
+            <span>消息</span>
+            <textarea
+              id="overlayMessageInput"
+              name="text"
+              rows="3"
+              placeholder="塔塔看看现在能做什么"
+              maxlength="300"
+            ></textarea>
+          </label>
+          <div class="overlay-gift-fields" id="overlayGiftFields" hidden>
+            <label>
+              <span>礼物</span>
+              <input id="overlayGiftNameInput" name="giftName" value="小花花" maxlength="40" />
+            </label>
+            <label>
+              <span>数量</span>
+              <input id="overlayGiftCountInput" name="count" type="number" value="1" min="1" max="999" step="1" />
+            </label>
+          </div>
+          <div class="overlay-quick-actions">
+            <button type="button" data-message="塔塔看看现在能做什么">看局面</button>
+            <button type="button" data-message="开始接管，打一回合">开始接管</button>
+            <button type="button" data-message="暂停，先别动">暂停</button>
+          </div>
+          <button class="overlay-send-button" type="submit">发送</button>
+        </form>
       </section>
 
       <section class="avatar-wrap" id="avatarWrap">
@@ -32,7 +73,10 @@
 
       <section class="bubble" id="bubble">
         <div class="speaker" id="speaker">塔塔</div>
-        <div class="speech" id="speech">准备开播...</div>
+        <div class="speech bilingual-speech" id="speech">
+          <div class="speech-ja" id="speechJa">準備中...</div>
+          <div class="speech-zh" id="speechZh">准备开播...</div>
+        </div>
       </section>
     </main>
     <script type="module" src="/overlay/live2d-runtime-loader.js"></script>

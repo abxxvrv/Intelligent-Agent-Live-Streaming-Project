@@ -530,8 +530,12 @@ export class AutoplayRunner {
   }
 
   private emitFinalReply(run: AutoplayRun, text: string): void {
+    const subtitleZh = text.slice(0, 180);
+    const say = "自動プレイの結果を更新したよ。";
     const decision: AgentDecision = {
-      say: text.slice(0, 180),
+      say,
+      subtitleJa: say,
+      subtitleZh,
       emotion: "focus",
       avatarAction: "talk",
       shouldSpeak: true,

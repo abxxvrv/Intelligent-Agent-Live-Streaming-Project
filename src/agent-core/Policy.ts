@@ -28,9 +28,9 @@ export class SpeakPolicy {
       return now - this.lastSpeakAt >= Math.max(3_000, this.config.agent.speakCooldownMs / 2);
     }
 
-    if (event.type === "game-state") {
-      return now - this.lastSpeakAt >= this.config.agent.speakCooldownMs * 2;
-    }
+  if (event.type === "game-state") {
+    return now - this.lastSpeakAt >= this.config.agent.speakCooldownMs * 2;
+  }
 
     if (event.type === "idle") {
       return now - this.lastSpeakAt >= this.config.agent.idlePromptMs;
@@ -48,6 +48,8 @@ export function describeTrigger(event: InputEvent): string {
   if (event.type === "danmaku") return `观众 ${event.user} 说：${event.text}`;
   if (event.type === "gift") return describeGift(event);
   if (event.type === "game-state") return `游戏状态更新：${event.state.summary}`;
+  if (event.type === "game-tick") return `游戏 tick：${event.reason || "timer"}`;
+  if (event.type === "debug-control") return `控制命令：切换到 ${event.mode} mode`;
   if (event.type === "idle") return "直播间冷场了一小会儿";
   return "直播事件";
 }

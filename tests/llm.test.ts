@@ -5,14 +5,17 @@ describe("normalizeDecision", () => {
   it("keeps valid structured agent output", () => {
     expect(
       normalizeDecision({
-        say: "这波先稳一下。",
+        say: "ここは少し安全にいくね。",
+        subtitleZh: "这波先稳一下。",
         emotion: "thinking",
         avatarAction: "think",
         shouldSpeak: true,
         gameIntent: "consider_card"
       })
     ).toEqual({
-      say: "这波先稳一下。",
+      say: "ここは少し安全にいくね。",
+      subtitleJa: "ここは少し安全にいくね。",
+      subtitleZh: "这波先稳一下。",
       emotion: "thinking",
       avatarAction: "think",
       shouldSpeak: true,
@@ -31,6 +34,8 @@ describe("normalizeDecision", () => {
       })
     ).toEqual({
       say: "",
+      subtitleJa: "",
+      subtitleZh: "",
       emotion: "neutral",
       avatarAction: "idle",
       shouldSpeak: false,

@@ -24,6 +24,8 @@ export type GameIntent =
 
 export type AgentDecision = {
   say: string;
+  subtitleJa?: string;
+  subtitleZh?: string;
   emotion: Emotion;
   avatarAction: AvatarAction;
   shouldSpeak: boolean;
@@ -35,6 +37,8 @@ export type AvatarCommand = {
   action: AvatarAction;
   speaking: boolean;
   text?: string;
+  subtitleJa?: string;
+  subtitleZh?: string;
   durationMs?: number;
 };
 
@@ -94,6 +98,13 @@ export type IdleEvent = {
   ts: number;
 };
 
+export type GameTickEvent = {
+  type: "game-tick";
+  id: string;
+  ts: number;
+  reason?: "timer" | "manual" | "after-action";
+};
+
 export type AgentReplyEvent = {
   type: "agent-reply";
   id: string;
@@ -108,6 +119,11 @@ export type VoiceEvent = {
   ts: number;
   status: "start" | "end" | "error";
   text?: string;
+  subtitleJa?: string;
+  subtitleZh?: string;
+  audioUrl?: string;
+  emotion?: Emotion;
+  action?: AvatarAction;
   error?: string;
 };
 
@@ -122,7 +138,29 @@ export type ToolCallEvent = {
   error?: string;
 };
 
-export type AgentTraceStage = "run-start" | "llm-start" | "llm-message" | "tool-intent" | "tool-result" | "final";
+export type AgentTraceStage =
+  | "queue"
+  | "batch"
+  | "run-start"
+  | "run-end"
+  | "router"
+  | "control_node"
+  | "mode-transition"
+  | "chat-enter"
+  | "chat-complete"
+  | "chat-ingest"
+  | "chat-should-respond"
+  | "llm-start"
+  | "llm-message"
+  | "tool-loop"
+  | "tool-intent"
+  | "tool-result"
+  | "preload_game_snapshot"
+  | "game_agent_node"
+  | "game_toolnode"
+  | "evaluate_game_status"
+  | "game-stub"
+  | "final";
 
 export type AgentTraceEvent = {
   type: "agent-trace";
@@ -142,7 +180,7 @@ export type DebugControlEvent = {
   type: "debug-control";
   id: string;
   ts: number;
-  autoplayEnabled: boolean;
+  mode: "chat" | "game";
   source?: string;
 };
 
@@ -163,6 +201,13 @@ export type OverlayEvent =
       command: AvatarCommand;
     };
 
-export type InputEvent = DanmakuEvent | GiftEvent | LiveSystemEvent | GameEvent | IdleEvent;
+export type InputEvent =
+  | DanmakuEvent
+  | GiftEvent
+  | LiveSystemEvent
+  | GameEvent
+  | IdleEvent
+  | GameTickEvent
+  | DebugControlEvent;
 
 export type RuntimeEvent = InputEvent | OverlayEvent;

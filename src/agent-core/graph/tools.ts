@@ -1,9 +1,7 @@
 import { tool, type StructuredToolInterface } from "@langchain/core/tools";
 import { z } from "zod";
 import type { AvatarAction, Emotion } from "../../types.js";
-
-const emotionSchema = z.enum(["neutral", "happy", "thinking", "surprised", "focus", "awkward"]);
-const actionSchema = z.enum(["idle", "talk", "nod", "wave", "think", "panic"]);
+import { actionSchema, createExpressTool, emotionSchema } from "./expressTool.js";
 
 export type AgentToolContext = {
   getGameSummary: () => string | undefined;
@@ -12,6 +10,7 @@ export type AgentToolContext = {
 
 export function createAgentTools(context: AgentToolContext): StructuredToolInterface[] {
   return [
+    createExpressTool(),
     tool(
       async () => {
         return JSON.stringify({

@@ -45,7 +45,7 @@ export class Live2DAvatarAdapter {
       throw new Error("pixi-live2d-display is not available; Live2DModel was not found");
     }
 
-    await verifyModelAssets(MODEL_URL);
+    const modelSettings = await createSilentModelSettings(MODEL_URL);
     this.ensureContainerSize();
 
     this.app = new window.PIXI.Application({
@@ -57,7 +57,7 @@ export class Live2DAvatarAdapter {
     });
 
     try {
-      this.model = await Live2DModel.from(MODEL_URL, { autoInteract: false });
+      this.model = await Live2DModel.from(modelSettings, { autoInteract: false });
     } catch (error) {
       throw new Error(`Live2D model failed to initialize from ${MODEL_URL}: ${formatError(error)}`);
     }
@@ -154,8 +154,24 @@ function getLive2DModelClass() {
   return window.PIXI?.live2d?.Live2DModel || window.Live2DModel || window.PIXI?.Live2DModel || null;
 }
 
-async function verifyModelAssets(modelUrl) {
+async function createSilentModelSettings(modelUrl) {
   const model = await fetchJson(modelUrl, "Live2D model manifest");
+  await verifyModelAssets(modelUrl, model);
+  removeMotionSounds(model);
+  model.url = new URL(modelUrl, window.location.href).href;
+  return model;
+}
+
+function removeMotionSounds(model) {
+  const motions = model?.FileReferences?.Motions || {};
+  for (const items of Object.values(motions)) {
+    for (const item of items || []) {
+      if (item && typeof item === "object") delete item.Sound;
+    }
+  }
+}
+
+async function verifyModelAssets(modelUrl, model) {
   const references = model?.FileReferences || {};
   const base = new URL(modelUrl, window.location.href);
   const assets = [

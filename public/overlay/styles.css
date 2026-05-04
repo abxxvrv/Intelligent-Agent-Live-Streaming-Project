@@ -17,6 +17,13 @@
   box-sizing: border-box;
 }
 
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
 html,
 body {
   width: 100%;
@@ -52,6 +59,10 @@ body {
 .chat-panel {
   bottom: 156px;
   min-height: 150px;
+  max-height: calc(100vh - 220px);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
 .panel-title {
@@ -74,6 +85,7 @@ body {
   gap: 7px;
   max-height: 118px;
   overflow: hidden;
+  flex: 0 0 auto;
 }
 
 .danmaku {
@@ -84,6 +96,96 @@ body {
 
 .danmaku strong {
   color: #0d8078;
+}
+
+.overlay-composer {
+  display: grid;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(35, 45, 65, 0.12);
+}
+
+.overlay-composer label span {
+  display: block;
+  margin-bottom: 4px;
+  color: #5a6273;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.overlay-form-row,
+.overlay-gift-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 8px;
+}
+
+.overlay-composer input,
+.overlay-composer select,
+.overlay-composer textarea {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 8px 9px;
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.9);
+  outline: none;
+}
+
+.overlay-composer textarea {
+  min-height: 72px;
+  max-height: 120px;
+  resize: vertical;
+  line-height: 1.42;
+}
+
+.overlay-composer input:focus,
+.overlay-composer select:focus,
+.overlay-composer textarea:focus {
+  border-color: rgba(35, 181, 169, 0.72);
+  box-shadow: 0 0 0 2px rgba(35, 181, 169, 0.14);
+}
+
+.overlay-gift-fields[hidden],
+.overlay-message-field[hidden] {
+  display: none;
+}
+
+.overlay-quick-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.overlay-composer.gift-mode .overlay-quick-actions {
+  display: none;
+}
+
+.overlay-quick-actions button,
+.overlay-send-button {
+  min-height: 32px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.overlay-quick-actions button {
+  padding: 0 6px;
+  color: #5a6273;
+  background: rgba(255, 255, 255, 0.78);
+  font-size: 13px;
+}
+
+.overlay-send-button {
+  color: #fff;
+  background: #0d8078;
+  border-color: #0d8078;
+  font-weight: 700;
+}
+
+.overlay-send-button:disabled {
+  cursor: wait;
+  opacity: 0.65;
 }
 
 .avatar-wrap {
@@ -243,6 +345,24 @@ body {
   font-weight: 700;
   letter-spacing: 0;
   word-break: break-word;
+}
+
+.bilingual-speech {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.speech-ja {
+  font-size: 1.15em;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.speech-zh {
+  font-size: 0.9em;
+  opacity: 0.85;
+  line-height: 1.35;
 }
 
 @keyframes breathe {

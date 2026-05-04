@@ -1,5 +1,5 @@
 const connectionState = document.getElementById("connectionState");
-const autoplayToggle = document.getElementById("autoplayToggle");
+const gameModeToggle = document.getElementById("gameModeToggle");
 const composer = document.getElementById("composer");
 const userInput = document.getElementById("userInput");
 const messageInput = document.getElementById("messageInput");
@@ -43,11 +43,11 @@ document.querySelectorAll("[data-message]").forEach((button) => {
   });
 });
 
-autoplayToggle.addEventListener("change", async () => {
+gameModeToggle.addEventListener("change", async () => {
   const result = await postJson("/api/debug/control", {
-    autoplayEnabled: autoplayToggle.checked
+    mode: gameModeToggle.checked ? "game" : "chat"
   });
-  autoplayToggle.checked = Boolean(result.autoplayEnabled);
+  gameModeToggle.checked = result.mode === "game";
   renderConnectionState();
 });
 
@@ -58,7 +58,7 @@ clearTools.addEventListener("click", () => {
 
 async function loadInitialState() {
   const state = await fetchJson("/api/debug/state");
-  autoplayToggle.checked = Boolean(state.autoplayEnabled);
+  gameModeToggle.checked = state.mode === "game";
   for (const event of state.events || []) {
     applyEvent(event);
   }
@@ -100,7 +100,7 @@ function applyEvent(event) {
   } else if (event.type === "gift") {
     pushFeed("礼物", `${event.user}: ${event.giftName} x${event.count}`);
   } else if (event.type === "agent-reply") {
-    pushFeed("塔塔", event.decision?.say || "", "reply");
+    pushFeed("塔塔", event.decision?.subtitleZh || event.decision?.say || "", "reply");
   } else if (event.type === "agent-trace") {
     pushTrace(event);
   } else if (event.type === "game-state") {
@@ -111,8 +111,8 @@ function applyEvent(event) {
   } else if (event.type === "tool-call") {
     pushTool(event);
   } else if (event.type === "debug-control") {
-    autoplayToggle.checked = Boolean(event.autoplayEnabled);
-    pushFeed("控制", event.autoplayEnabled ? "手动接管已开启" : "手动接管已关闭");
+    gameModeToggle.checked = event.mode === "game";
+    pushFeed("控制", event.mode === "game" ? "游戏模式已开启" : "已回到聊天模式");
     renderConnectionState();
   } else if (event.type === "live-system") {
     pushFeed("系统", event.message || "");
@@ -236,7 +236,7 @@ function meta(label, time, variant = "") {
 }
 
 function renderConnectionState() {
-  const mode = autoplayToggle.checked ? "手动接管开启" : "只读讲解";
+  const mode = gameModeToggle.checked ? "游戏模式" : "聊天模式";
   connectionState.textContent = `${connectionState.textContent.split(" · ")[0] || "SSE"} · ${mode}`;
 }
 

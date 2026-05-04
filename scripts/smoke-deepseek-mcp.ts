@@ -40,25 +40,51 @@ try {
     }
   });
 
-  const initialState: AgentGraphState = {
-    inputEvent: {
+  const inputEvent = {
       type: "danmaku",
       id: "dm_mcp_smoke",
       ts: Date.now(),
       user: "测试观众",
       text: `请调用 probe_tool，probeMessage=${probeMessage}`
-    },
+    } as const;
+
+  const initialState: AgentGraphState = {
+    inputEvent,
+    inputEvents: [inputEvent],
     runId: "run_mcp_smoke",
     persona: config.agent.persona,
     trigger: `请调用 probe_tool，probeMessage=${probeMessage}`,
     gameSummary: undefined,
+    mode: "chat",
+    route: "chat",
+    shouldStartGame: false,
+    gameState: undefined,
+    availableActions: [],
+    observedAt: undefined,
+    gameOver: false,
+    gameSession: {
+      status: "idle",
+      tickCount: 0,
+      actionCount: 0
+    },
+    audienceContext: {
+      currentEvents: [inputEvent],
+      recentMessages: [],
+      giftEvents: [],
+      adminCommands: []
+    },
+    lastToolCategory: undefined,
+    gameActionExecuted: false,
+    lastToolError: undefined,
     recentDanmaku: [`测试观众: 请调用 probe_tool，probeMessage=${probeMessage}`],
     recentReplies: [],
     conversationHistory: [],
     shouldRespond: false,
     messages: [],
+    deepseekMessages: [],
     toolResults: [],
     toolLoopCount: 0,
+    expressedDecision: undefined,
     memoryNotes: [],
     decision: undefined
   };

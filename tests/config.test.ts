@@ -14,6 +14,8 @@ describe("loadConfig MCP settings", () => {
 
       expect(defaultConfig.mockBili).toBe(false);
       expect(defaultConfig.mockSts2).toBe(false);
+      expect(defaultConfig.gamePollingEnabled).toBe(false);
+      expect(defaultConfig.agent.gameTickMs).toBe(2500);
       expect(mockConfig.mockBili).toBe(true);
       expect(mockConfig.mockSts2).toBe(true);
     } finally {
@@ -53,6 +55,57 @@ describe("loadConfig MCP settings", () => {
       expect(config.sts2Mcp.toolProfile).toBe("guided");
       expect(config.sts2Mcp.allowedTools).toEqual(["health_check", "get_game_state", "act"]);
       expect(config.sts2Mcp.allowActions).toBe(true);
+    } finally {
+      restoreEnv(previous);
+    }
+  });
+
+  it("parses GPT-SoVITS Roxy settings from environment", () => {
+    const previous = snapshotEnv([
+      "TTS_ENABLED",
+      "TTS_PROVIDER",
+      "GPT_SOVITS_ENDPOINT",
+      "GPT_SOVITS_GPT_WEIGHTS_PATH",
+      "GPT_SOVITS_SOVITS_WEIGHTS_PATH",
+      "GPT_SOVITS_REF_AUDIO_ROOT",
+      "GPT_SOVITS_DEFAULT_REF_EMOTION",
+      "GPT_SOVITS_TEXT_LANG",
+      "GPT_SOVITS_PROMPT_LANG",
+      "GPT_SOVITS_TEXT_SPLIT_METHOD",
+      "GPT_SOVITS_STREAMING_MODE",
+      "GPT_SOVITS_STREAMING_MEDIA_TYPE",
+      "GPT_SOVITS_BATCH_SIZE",
+      "GPT_SOVITS_SPEED_FACTOR"
+    ]);
+
+    try {
+      process.env.TTS_ENABLED = "true";
+      process.env.TTS_PROVIDER = "gpt-sovits";
+      process.env.GPT_SOVITS_ENDPOINT = "http://127.0.0.1:9880/";
+      process.env.GPT_SOVITS_GPT_WEIGHTS_PATH = "E:/models/Roxy_Pro.ckpt";
+      process.env.GPT_SOVITS_SOVITS_WEIGHTS_PATH = "E:/models/Roxy_Pro.pth";
+      process.env.GPT_SOVITS_REF_AUDIO_ROOT = "E:/ref_audio/参考音频实例";
+      process.env.GPT_SOVITS_DEFAULT_REF_EMOTION = "慵懒";
+      process.env.GPT_SOVITS_TEXT_LANG = "zh";
+      process.env.GPT_SOVITS_PROMPT_LANG = "zh";
+      process.env.GPT_SOVITS_TEXT_SPLIT_METHOD = "cut5";
+      process.env.GPT_SOVITS_STREAMING_MODE = "3";
+      process.env.GPT_SOVITS_STREAMING_MEDIA_TYPE = "wav";
+      process.env.GPT_SOVITS_BATCH_SIZE = "2";
+      process.env.GPT_SOVITS_SPEED_FACTOR = "1.2";
+
+      const config = loadConfig(["node", "test"]);
+
+      expect(config.tts.provider).toBe("gpt-sovits");
+      expect(config.tts.gptSoVits.endpoint).toBe("http://127.0.0.1:9880");
+      expect(config.tts.gptSoVits.gptWeightsPath).toBe("E:/models/Roxy_Pro.ckpt");
+      expect(config.tts.gptSoVits.sovitsWeightsPath).toBe("E:/models/Roxy_Pro.pth");
+      expect(config.tts.gptSoVits.refAudioRoot).toBe("E:/ref_audio/参考音频实例");
+      expect(config.tts.gptSoVits.defaultRefEmotion).toBe("慵懒");
+      expect(config.tts.gptSoVits.streamingMode).toBe(3);
+      expect(config.tts.gptSoVits.streamingMediaType).toBe("wav");
+      expect(config.tts.gptSoVits.batchSize).toBe(2);
+      expect(config.tts.gptSoVits.speedFactor).toBe(1.2);
     } finally {
       restoreEnv(previous);
     }

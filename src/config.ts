@@ -1,11 +1,14 @@
 import "dotenv/config";
 
+export type TtsProvider = "system" | "gpt-sovits" | "disabled";
+
 export type AppConfig = {
   host: string;
   port: number;
   publicBaseUrl: string;
   mockBili: boolean;
   mockSts2: boolean;
+  gamePollingEnabled: boolean;
   biliRoomId?: number;
   sts2ApiUrl: string;
   sts2Mcp: {
@@ -26,11 +29,25 @@ export type AppConfig = {
     timeoutMs: number;
   };
   tts: {
-    provider: "system" | "disabled";
+    provider: TtsProvider;
     enabled: boolean;
     voice?: string;
     rate: number;
     volume: number;
+    gptSoVits: {
+      endpoint: string;
+      gptWeightsPath: string;
+      sovitsWeightsPath: string;
+      refAudioRoot: string;
+      defaultRefEmotion: string;
+      textLang: string;
+      promptLang: string;
+      textSplitMethod: string;
+      streamingMode: number;
+      streamingMediaType: string;
+      batchSize: number;
+      speedFactor: number;
+    };
   };
   agent: {
     name: string;
@@ -38,6 +55,7 @@ export type AppConfig = {
     speakCooldownMs: number;
     idlePromptMs: number;
     maxRecentDanmaku: number;
+    gameTickMs: number;
   };
 };
 
@@ -52,6 +70,7 @@ export function loadConfig(argv = process.argv): AppConfig {
     publicBaseUrl: process.env.PUBLIC_BASE_URL || `http://${host}:${port}`,
     mockBili: forceMock || boolFromEnv("MOCK_BILI", false),
     mockSts2: forceMock || boolFromEnv("MOCK_STS2", false),
+    gamePollingEnabled: boolFromEnv("GAME_POLLING_ENABLED", false),
     biliRoomId: optionalNumberFromEnv("BILI_ROOM_ID"),
     sts2ApiUrl: stripTrailingSlash(process.env.STS2_API_URL || "http://localhost:15526"),
     sts2Mcp: {
@@ -85,11 +104,29 @@ export function loadConfig(argv = process.argv): AppConfig {
       timeoutMs: numberFromEnv("LLM_TIMEOUT_MS", 30_000)
     },
     tts: {
-      provider: boolFromEnv("TTS_ENABLED", true) ? "system" : "disabled",
+      provider: boolFromEnv("TTS_ENABLED", true) ? ttsProviderFromEnv("TTS_PROVIDER", "system") : "disabled",
       enabled: boolFromEnv("TTS_ENABLED", true),
       voice: process.env.TTS_VOICE || undefined,
       rate: numberFromEnv("TTS_RATE", 0),
-      volume: numberFromEnv("TTS_VOLUME", 90)
+      volume: numberFromEnv("TTS_VOLUME", 90),
+      gptSoVits: {
+        endpoint: stripTrailingSlash(process.env.GPT_SOVITS_ENDPOINT || "http://127.0.0.1:9880"),
+        gptWeightsPath:
+          process.env.GPT_SOVITS_GPT_WEIGHTS_PATH ||
+          "E:/GPT-SoVITS/GPT-SoVITS-v2pro-20250604/GPT_weights_v2ProPlus/Roxy_Pro.ckpt",
+        sovitsWeightsPath:
+          process.env.GPT_SOVITS_SOVITS_WEIGHTS_PATH ||
+          "E:/GPT-SoVITS/GPT-SoVITS-v2pro-20250604/SoVITS_weights_v2ProPlus/Roxy_Pro.pth",
+        refAudioRoot: process.env.GPT_SOVITS_REF_AUDIO_ROOT || "E:/ref_audio/参考音频实例",
+        defaultRefEmotion: process.env.GPT_SOVITS_DEFAULT_REF_EMOTION || "慵懒",
+        textLang: process.env.GPT_SOVITS_TEXT_LANG || "zh",
+        promptLang: process.env.GPT_SOVITS_PROMPT_LANG || "zh",
+        textSplitMethod: process.env.GPT_SOVITS_TEXT_SPLIT_METHOD || "cut5",
+        streamingMode: numberFromEnv("GPT_SOVITS_STREAMING_MODE", 3),
+        streamingMediaType: process.env.GPT_SOVITS_STREAMING_MEDIA_TYPE || "wav",
+        batchSize: numberFromEnv("GPT_SOVITS_BATCH_SIZE", 1),
+        speedFactor: numberFromEnv("GPT_SOVITS_SPEED_FACTOR", 1.0)
+      }
     },
     agent: {
       name: process.env.AGENT_NAME || "一白",
@@ -98,7 +135,8 @@ export function loadConfig(argv = process.argv): AppConfig {
         "你是一个普通的中文 AI 助手。请自然、简洁地回答用户问题。",
       speakCooldownMs: numberFromEnv("SPEAK_COOLDOWN_MS", 8_000),
       idlePromptMs: numberFromEnv("IDLE_PROMPT_MS", 45_000),
-      maxRecentDanmaku: numberFromEnv("MAX_RECENT_DANMAKU", 20)
+      maxRecentDanmaku: numberFromEnv("MAX_RECENT_DANMAKU", 20),
+      gameTickMs: numberFromEnv("GAME_TICK_MS", 2_500)
     }
   };
 }
@@ -137,5 +175,11 @@ function listFromEnv(name: string, fallback: string[]): string[] {
 function toolProfileFromEnv(name: string, fallback: "guided" | "layered" | "full"): "guided" | "layered" | "full" {
   const raw = process.env[name]?.trim().toLowerCase();
   if (raw === "layered" || raw === "full" || raw === "guided") return raw;
+  return fallback;
+}
+
+function ttsProviderFromEnv(name: string, fallback: TtsProvider): TtsProvider {
+  const raw = process.env[name]?.trim().toLowerCase();
+  if (raw === "system" || raw === "gpt-sovits" || raw === "disabled") return raw;
   return fallback;
 }

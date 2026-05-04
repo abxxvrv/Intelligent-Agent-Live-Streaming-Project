@@ -50,7 +50,7 @@ export class AgentRuntime {
 
     if (!decision.shouldSpeak) return;
     this.policy.registerSpeak();
-    this.memory.addReply(decision.say);
+    this.memory.addReply(decision.subtitleZh?.trim() || decision.say);
     bus.publish({
       type: "agent-reply",
       id: newId("reply"),

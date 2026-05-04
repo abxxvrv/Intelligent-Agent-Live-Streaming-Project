@@ -7,6 +7,7 @@ import type { EventBus } from "../events/EventBus.js";
 import type { OverlayEvent, RuntimeEvent } from "../types.js";
 import { newId } from "../utils/id.js";
 import { Logger } from "../utils/logger.js";
+import type { TtsStreamProvider } from "../voice/TtsEngine.js";
 
 const MIME_TYPES: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
@@ -34,6 +35,7 @@ export class OverlayServer {
     private readonly bus: EventBus,
     private readonly publicDir: string,
     private readonly debugControl?: DebugControl,
+    private readonly ttsStreamProvider?: TtsStreamProvider,
     private readonly live2dRuntimeDir = join(process.cwd(), "live2d", "runtime")
   ) {}
 
@@ -77,6 +79,10 @@ export class OverlayServer {
       await this.handleDebugDanmaku(request, response);
       return;
     }
+    if (url.pathname === "/api/debug/gift" && request.method === "POST") {
+      await this.handleDebugGift(request, response);
+      return;
+    }
     if (url.pathname === "/api/debug/control" && request.method === "POST") {
       await this.handleDebugControl(request, response);
       return;
@@ -84,7 +90,7 @@ export class OverlayServer {
     if (url.pathname === "/api/debug/state" && request.method === "GET") {
       sendJson(response, {
         ok: true,
-        autoplayEnabled: this.debugControl?.isAutoplayEnabled() ?? false,
+        mode: this.debugControl?.getMode() ?? "chat",
         events: this.history,
         ts: Date.now()
       });
@@ -92,6 +98,10 @@ export class OverlayServer {
     }
     if (url.pathname === "/api/events") {
       this.handleSse(response);
+      return;
+    }
+    if (url.pathname.startsWith("/api/tts/stream/") && request.method === "GET") {
+      await this.handleTtsStream(url, response);
       return;
     }
     if (url.pathname === "/debug") {
@@ -114,6 +124,10 @@ export class OverlayServer {
     const user = stringField(body, "user") || "调试员";
     const text = stringField(body, "text");
     if (!text) {
+      this.logger.warn("invalid debug danmaku request", {
+        user,
+        reason: "text is required"
+      });
       sendJson(response, { ok: false, error: "text is required" }, 400);
       return;
     }
@@ -126,6 +140,46 @@ export class OverlayServer {
       text: text.slice(0, 300),
       raw: { source: "debug" }
     };
+    this.logger.info("debug danmaku received", {
+      user: event.user,
+      textLength: event.text.length,
+      eventId: event.id
+    });
+    this.bus.publish(event);
+    sendJson(response, { ok: true, event });
+  }
+
+  private async handleDebugGift(request: IncomingMessage, response: ServerResponse): Promise<void> {
+    const body = await readJsonBody(request);
+    const user = stringField(body, "user") || "调试员";
+    const giftName = stringField(body, "giftName") || "小花花";
+    const count = numberField(body, "count");
+    if (count === undefined || !Number.isInteger(count) || count < 1 || count > 999) {
+      this.logger.warn("invalid debug gift request", {
+        user,
+        giftName,
+        count,
+        reason: "count must be an integer from 1 to 999"
+      });
+      sendJson(response, { ok: false, error: "count must be an integer from 1 to 999" }, 400);
+      return;
+    }
+
+    const event = {
+      type: "gift" as const,
+      id: newId("debug_gift"),
+      ts: Date.now(),
+      user: user.slice(0, 24),
+      giftName: giftName.slice(0, 40),
+      count,
+      raw: { source: "debug" }
+    };
+    this.logger.info("debug gift received", {
+      user: event.user,
+      giftName: event.giftName,
+      count: event.count,
+      eventId: event.id
+    });
     this.bus.publish(event);
     sendJson(response, { ok: true, event });
   }
@@ -136,22 +190,22 @@ export class OverlayServer {
       return;
     }
     const body = await readJsonBody(request);
-    const enabled = booleanField(body, "autoplayEnabled");
-    if (enabled === undefined) {
-      sendJson(response, { ok: false, error: "autoplayEnabled is required" }, 400);
+    const mode = modeField(body, "mode");
+    if (!mode) {
+      sendJson(response, { ok: false, error: "mode must be chat or game" }, 400);
       return;
     }
 
-    const autoplayEnabled = this.debugControl.setAutoplayEnabled(enabled);
+    const nextMode = this.debugControl.setMode(mode);
     const event = {
       type: "debug-control" as const,
       id: newId("debug_ctl"),
       ts: Date.now(),
-      autoplayEnabled,
+      mode: nextMode,
       source: "debug"
     };
     this.bus.publish(event);
-    sendJson(response, { ok: true, autoplayEnabled });
+    sendJson(response, { ok: true, mode: nextMode });
   }
 
   private handleSse(response: ServerResponse): void {
@@ -168,6 +222,17 @@ export class OverlayServer {
     this.clients.add(response);
     response.on("close", () => this.clients.delete(response));
     response.on("error", () => this.clients.delete(response));
+  }
+
+  private async handleTtsStream(url: URL, response: ServerResponse): Promise<void> {
+    if (!this.ttsStreamProvider) {
+      response.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
+      response.end("TTS streaming is unavailable");
+      return;
+    }
+
+    const id = decodeURIComponent(url.pathname.replace(/^\/api\/tts\/stream\//, ""));
+    await this.ttsStreamProvider.pipeStream(id, response);
   }
 
   private broadcastIfOverlay(event: RuntimeEvent): void {
@@ -271,4 +336,17 @@ function stringField(obj: Record<string, unknown>, key: string): string | undefi
 function booleanField(obj: Record<string, unknown>, key: string): boolean | undefined {
   const value = obj[key];
   return typeof value === "boolean" ? value : undefined;
+}
+
+function modeField(obj: Record<string, unknown>, key: string): "chat" | "game" | undefined {
+  const value = obj[key];
+  return value === "chat" || value === "game" ? value : undefined;
+}
+
+function numberField(obj: Record<string, unknown>, key: string): number | undefined {
+  const value = obj[key];
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value !== "string" || !value.trim()) return undefined;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
 }
